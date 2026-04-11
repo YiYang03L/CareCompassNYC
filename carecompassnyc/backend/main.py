@@ -1,0 +1,353 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
+import httpx
+import base64
+import json
+
+from prompts import SYSTEM_PROMPT
+from config import MINIMAX_API_KEY, MINIMAX_API_BASE
+
+app = FastAPI(title="CareCompass NYC API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class ChatRequest(BaseModel):
+    message: str
+    language: Optional[str] = "en"
+
+class ImageAnalysisRequest(BaseModel):
+    image_data: str
+    mime_type: Optional[str] = "image/jpeg"
+    language: Optional[str] = "en"
+
+class STTRequest(BaseModel):
+    audio_data: str
+    mime_type: Optional[str] = "audio/webm"
+
+class TTSRequest(BaseModel):
+    text: str
+    language: Optional[str] = "en"
+
+
+# ── MiniMax API (OpenAI-compatible, api.minimax.io/v1) ────────────────────────
+async def call_minimax_chat(messages: list, model: str = "MiniMax-Text-01") -> str:
+    if not MINIMAX_API_KEY:
+        raise HTTPException(status_code=500, detail="MINIMAX_API_KEY not configured")
+
+    url = f"{MINIMAX_API_BASE}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 1000,
+    }
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(url, headers=headers, json=payload)
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"MiniMax API error {response.status_code}: {response.text}"
+            )
+        data = response.json()
+        # OpenAI-compatible response format
+        return data["choices"][0]["message"]["content"]
+
+
+# ── Language helper ───────────────────────────────────────────────────────────
+LANGUAGE_NAMES = {
+    "en": "English",
+    "zh": "Chinese (Simplified)",
+    "es": "Spanish",
+    "hi": "Hindi",
+    "ar": "Arabic",
+    "ru": "Russian",
+    "fr": "French",
+}
+
+def language_instruction(lang: str) -> str:
+    # 'auto' means voice mode — respond in whatever language the user spoke
+    if not lang or lang == "auto":
+        return "\n\nIMPORTANT: Detect the language of the user's message and respond in that same language."
+    name = LANGUAGE_NAMES.get(lang, "English")
+    if lang == "en":
+        return ""
+    return f"\n\nIMPORTANT: The user's preferred language is {name}. Please respond in {name}."
+
+
+# ── Chat endpoint ─────────────────────────────────────────────────────────────
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
+    try:
+        system = SYSTEM_PROMPT + language_instruction(request.language)
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": request.message}
+        ]
+        response = await call_minimax_chat(messages)
+
+        # Detect if response mentions facilities → attach cards
+        facilities = get_relevant_facilities(request.message, response)
+
+        return {
+            "response": response,
+            "facilities": facilities,
+            "language": request.language
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Image analysis ────────────────────────────────────────────────────────────
+@app.post("/api/analyze-image")
+async def analyze_image(request: ImageAnalysisRequest):
+    try:
+        lang_note = language_instruction(request.language)
+        analysis_prompt = f"""Analyze this insurance card or medical bill image and extract ALL relevant information.
+
+For insurance cards, explain each term in plain language using only the user's language (no bilingual labels):
+- Premium: the monthly payment to keep coverage active
+- Deductible: what the person pays out-of-pocket before insurance starts covering costs
+- Copay: a fixed fee paid each visit to a provider
+- Coinsurance: the percentage split after the deductible is met
+- Out-of-Pocket Maximum: the most the person will ever pay in a year
+- In-Network vs Out-of-Network: cost difference between contracted and non-contracted providers
+- Insurance company name and plan type (HMO/PPO/EPO)
+
+For each term found on the card, give a concrete dollar example using the actual numbers shown.
+For medical bills, itemize each charge and explain what it means.
+
+CRITICAL: Respond entirely in the user's language. Do NOT mix in any other language or show bilingual labels.{lang_note}"""
+
+        mime = request.mime_type or "image/jpeg"
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": [
+                {"type": "text", "text": analysis_prompt},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{request.image_data}"}}
+            ]}
+        ]
+        response = await call_minimax_chat(messages)
+        return {"response": response}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── STT ───────────────────────────────────────────────────────────────────────
+@app.post("/api/stt")
+async def speech_to_text(request: STTRequest):
+    try:
+        url = f"{MINIMAX_API_BASE}/audio/transcriptions"
+        headers = {"Authorization": f"Bearer {MINIMAX_API_KEY}"}
+
+        audio_bytes = base64.b64decode(request.audio_data)
+
+        # Match the actual format Chrome records (webm, not wav)
+        mime = (request.mime_type or "audio/webm").split(";")[0].strip()
+        ext_map = {"audio/webm": "webm", "audio/mp4": "m4a",
+                   "audio/ogg": "ogg", "audio/wav": "wav"}
+        ext = ext_map.get(mime, "webm")
+
+        files = {
+            "file": (f"audio.{ext}", audio_bytes, mime),
+            "model": (None, "speech-01")
+        }
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(url, headers=headers, files=files)
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code,
+                                    detail=f"MiniMax STT error: {response.text}")
+            data = response.json()
+            return {"text": data.get("text", "")}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── TTS ───────────────────────────────────────────────────────────────────────
+VOICE_MAP = {
+    "zh": "female-tianmei",
+    "en": "female-shaonv",
+    "es": "female-shaonv",
+    "hi": "female-shaonv",
+    "ar": "female-shaonv",
+    "ru": "female-shaonv",
+    "fr": "female-shaonv",
+}
+
+@app.post("/api/tts")
+async def text_to_speech(request: TTSRequest):
+    try:
+        url = f"{MINIMAX_API_BASE}/t2a_v2"
+        headers = {
+            "Authorization": f"Bearer {MINIMAX_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        voice_id = VOICE_MAP.get(request.language, "female-shaonv")
+        payload = {
+            "model": "speech-01-turbo",
+            "text": request.text[:500],  # Limit for speed
+            "stream": False,
+            "voice_setting": {
+                "voice_id": voice_id,
+                "speed": 1.0,
+                "vol": 1.0,
+                "pitch": 0
+            },
+            "audio_setting": {
+                "sample_rate": 32000,
+                "bitrate": 128000,
+                "format": "mp3"
+            }
+        }
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code,
+                                    detail=f"MiniMax TTS error: {response.text}")
+            data = response.json()
+            # MiniMax TTS v2 returns audio in data.audio field (hex or base64)
+            audio_data = data.get("data", {}).get("audio", "")
+            if not audio_data:
+                raise HTTPException(status_code=500, detail="No audio in TTS response")
+            # Convert hex to base64 if needed
+            if all(c in '0123456789abcdefABCDEF' for c in audio_data[:20]):
+                audio_bytes = bytes.fromhex(audio_data)
+                audio_base64 = base64.b64encode(audio_bytes).decode()
+            else:
+                audio_base64 = audio_data
+            return {"audio": audio_base64}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── NYC facilities data ───────────────────────────────────────────────────────
+import os
+
+FACILITIES_FILE = os.path.join(os.path.dirname(__file__), "data", "health_facilities.json")
+
+def load_facilities():
+    try:
+        with open(FACILITIES_FILE) as f:
+            return json.load(f)["facilities"]
+    except Exception:
+        return []
+
+KEYWORDS_UNINSURED = ["no insurance", "uninsured", "can't afford", "free clinic",
+                       "没有保险", "免费", "sin seguro", "free care", "nyc care"]
+KEYWORDS_MEDICAID  = ["medicaid", "low income", "low-income", "government insurance",
+                       "低收入", "医疗补助"]
+KEYWORDS_HOSPITAL  = ["hospital", "clinic", "doctor", "urgent care", "er ",
+                       "emergency", "医院", "诊所", "医生"]
+
+def get_relevant_facilities(user_msg: str, ai_response: str) -> list:
+    combined = (user_msg + " " + ai_response).lower()
+    all_facilities = load_facilities()
+    matched = []
+
+    if any(k in combined for k in KEYWORDS_UNINSURED):
+        matched = [f for f in all_facilities if "nyc_care" in f.get("accepts", [])
+                   or "uninsured" in f.get("accepts", [])][:3]
+    elif any(k in combined for k in KEYWORDS_MEDICAID):
+        matched = [f for f in all_facilities if "medicaid" in f.get("accepts", [])][:3]
+    elif any(k in combined for k in KEYWORDS_HOSPITAL):
+        matched = all_facilities[:3]
+
+    return matched
+
+
+# ── Facilities API endpoint ───────────────────────────────────────────────────
+@app.get("/api/facilities")
+async def get_facilities(type: Optional[str] = None, borough: Optional[str] = None):
+    facilities = load_facilities()
+    if type:
+        facilities = [f for f in facilities if f.get("type") == type]
+    if borough:
+        facilities = [f for f in facilities
+                      if f.get("borough", "").lower() == borough.lower()]
+    return {"facilities": facilities}
+
+
+@app.get("/api/facilities/search")
+async def search_facilities(zipcode: str, insurance: Optional[str] = None):
+    """Search facilities near a zipcode. insurance: 'none'|'medicaid'|'medicare'|any plan name."""
+    all_f = load_facilities()
+
+    # Load borough mapping
+    try:
+        with open(FACILITIES_FILE) as f:
+            data = json.load(f)
+        zip_map = data.get("zipcode_to_borough", {})
+    except Exception:
+        zip_map = {}
+
+    zipcode = zipcode.strip()
+    prefix3 = zipcode[:3]
+
+    # Find borough from zipcode
+    borough = zip_map.get(prefix3, "")
+
+    # Also try exact match on facility zipcodes (nearest facilities)
+    def zip_distance(fzip):
+        try:
+            return abs(int(fzip) - int(zipcode))
+        except Exception:
+            return 99999
+
+    # Filter by borough first, then sort by zip distance
+    if borough:
+        same_borough = [f for f in all_f if f.get("borough", "") == borough]
+    else:
+        same_borough = all_f
+
+    # Filter by insurance type
+    if insurance == "none" or insurance == "uninsured":
+        same_borough = [f for f in same_borough
+                        if "uninsured" in f.get("accepts", []) or "nyc_care" in f.get("accepts", [])]
+    elif insurance == "medicaid":
+        same_borough = [f for f in same_borough if "medicaid" in f.get("accepts", [])]
+    elif insurance == "medicare":
+        same_borough = [f for f in same_borough if "medicare" in f.get("accepts", [])]
+    elif insurance == "private":
+        same_borough = [f for f in same_borough if "private_insurance" in f.get("accepts", [])]
+
+    # Sort by zip proximity
+    results = sorted(same_borough, key=lambda f: zip_distance(f.get("zipcode", "99999")))
+
+    return {
+        "zipcode": zipcode,
+        "borough": borough or "NYC",
+        "facilities": results[:6],
+        "total": len(results)
+    }
+
+
+# ── Health check ──────────────────────────────────────────────────────────────
+@app.get("/")
+async def root():
+    return {"message": "CareCompass NYC API is running"}
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "api_key_configured": bool(MINIMAX_API_KEY)}

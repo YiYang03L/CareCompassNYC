@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CareCompass NYC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+<!-- ── Navbar ─────────────────────────────────────────────────────── -->
+<nav class="navbar">
+    <div class="nav-logo">
+        <div class="logo-mark">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M10 2a8 8 0 1 0 8 8" stroke-linecap="round"/>
+                <path d="M10 6v4l2.5 2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </div>
+        <span class="logo-text">CareCompass <span class="logo-nyc">NYC</span></span>
+    </div>
+
+    <div class="nav-center">
+        <span class="nav-tagline" id="nav-tagline">Healthcare Navigator for New York's Communities</span>
+    </div>
+
+    <div class="nav-right">
+        <!-- Language selector -->
+        <div class="lang-select-wrap">
+            <select id="lang-select" onchange="setLanguage(this.value)">
+                <option value="en">English</option>
+                <option value="zh">中文</option>
+                <option value="es">Español</option>
+                <option value="hi">हिन्दी</option>
+                <option value="ar">العربية</option>
+                <option value="ru">Русский</option>
+                <option value="fr">Français</option>
+            </select>
+        </div>
+        <!-- Auto-voice toggle -->
+        <button id="auto-voice-btn" class="icon-btn active" onclick="toggleAutoVoice()" title="Auto-play AI responses">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+        </button>
+    </div>
+</nav>
+
+<!-- ── App layout ──────────────────────────────────────────────────── -->
+<div class="app-layout">
+
+    <!-- ── Chat panel ──────────────────────────────────────────────── -->
+    <section class="chat-panel">
+        <div class="panel-header">
+            <div class="header-left">
+                <div class="live-dot"></div>
+                <span class="panel-title" id="panel-title-text">AI Health Navigator</span>
+            </div>
+            <span class="panel-badge">MiniMax AI</span>
+        </div>
+
+        <div id="chat-messages" class="chat-messages">
+            <!-- Welcome screen -->
+            <div class="welcome" id="welcome-screen">
+
+                <!-- ────────────────────────────────────────────────────────
+                     ILLUSTRATION ZONE
+                     To add YOUR own hand-drawn characters:
+                     1. Save each illustration as a PNG (transparent bg recommended)
+                        in the folder:  frontend/img/
+                        e.g.  img/character-1.png, img/character-2.png, etc.
+                     2. In each .illus-slot below, change the <div class="illus-placeholder">
+                        to: <img class="illus-img" src="img/character-1.png" alt="...">
+                     3. Update the label text to whatever you like.
+                     The CSS handles hover animation automatically.
+                ──────────────────────────────────────────────────────────── -->
+                <!-- Community character marquee -->
+                <div class="char-marquee-wrap">
+                    <div class="char-marquee-track">
+                        <img src="img/characters/01_01.png" alt="" style="--f:0.0s"><img src="img/characters/01_02.png" alt="" style="--f:0.3s">
+                        <img src="img/characters/01_03.png" alt="" style="--f:0.6s"><img src="img/characters/01_04.png" alt="" style="--f:0.9s">
+                        <img src="img/characters/01_05.png" alt="" style="--f:1.2s"><img src="img/characters/01_06.png" alt="" style="--f:1.5s">
+                        <img src="img/characters/01_07.png" alt="" style="--f:1.8s"><img src="img/characters/01_08.png" alt="" style="--f:2.1s">
+                        <img src="img/characters/01_09.png" alt="" style="--f:2.4s"><img src="img/characters/01_10.png" alt="" style="--f:2.7s">
+                        <img src="img/characters/01_11.png" alt="" style="--f:3.0s"><img src="img/characters/01_12.png" alt="" style="--f:3.3s">
+                        <img src="img/characters/01_13.png" alt="" style="--f:3.6s"><img src="img/characters/01_14.png" alt="" style="--f:3.9s">
+                        <img src="img/characters/01_15.png" alt="" style="--f:4.2s"><img src="img/characters/01_16.png" alt="" style="--f:4.5s">
+                        <img src="img/characters/02_01.png" alt="" style="--f:0.15s"><img src="img/characters/02_02.png" alt="" style="--f:0.45s">
+                        <img src="img/characters/02_03.png" alt="" style="--f:0.75s"><img src="img/characters/02_04.png" alt="" style="--f:1.05s">
+                        <img src="img/characters/02_05.png" alt="" style="--f:1.35s"><img src="img/characters/02_06.png" alt="" style="--f:1.65s">
+                        <img src="img/characters/02_07.png" alt="" style="--f:1.95s"><img src="img/characters/02_08.png" alt="" style="--f:2.25s">
+                        <img src="img/characters/02_09.png" alt="" style="--f:2.55s"><img src="img/characters/02_10.png" alt="" style="--f:2.85s">
+                        <img src="img/characters/02_11.png" alt="" style="--f:3.15s"><img src="img/characters/02_12.png" alt="" style="--f:3.45s">
+                        <img src="img/characters/02_13.png" alt="" style="--f:3.75s"><img src="img/characters/02_14.png" alt="" style="--f:4.05s">
+                        <img src="img/characters/02_15.png" alt="" style="--f:4.35s"><img src="img/characters/02_16.png" alt="" style="--f:4.65s">
+                        <img src="img/characters/03_01.png" alt="" style="--f:0.2s"><img src="img/characters/03_02.png" alt="" style="--f:0.5s">
+                        <img src="img/characters/03_03.png" alt="" style="--f:0.8s"><img src="img/characters/03_04.png" alt="" style="--f:1.1s">
+                        <img src="img/characters/03_05.png" alt="" style="--f:1.4s"><img src="img/characters/03_06.png" alt="" style="--f:1.7s">
+                        <img src="img/characters/03_07.png" alt="" style="--f:2.0s"><img src="img/characters/03_08.png" alt="" style="--f:2.3s">
+                        <img src="img/characters/03_09.png" alt="" style="--f:2.6s"><img src="img/characters/03_10.png" alt="" style="--f:2.9s">
+                        <img src="img/characters/03_11.png" alt="" style="--f:3.2s"><img src="img/characters/03_12.png" alt="" style="--f:3.5s">
+                        <img src="img/characters/03_13.png" alt="" style="--f:3.8s"><img src="img/characters/03_14.png" alt="" style="--f:4.1s">
+                        <img src="img/characters/03_15.png" alt="" style="--f:4.4s"><img src="img/characters/03_16.png" alt="" style="--f:4.7s">
+                        <!-- duplicate for seamless loop -->
+                        <img src="img/characters/01_01.png" alt="" style="--f:0.0s"><img src="img/characters/01_02.png" alt="" style="--f:0.3s">
+                        <img src="img/characters/01_03.png" alt="" style="--f:0.6s"><img src="img/characters/01_04.png" alt="" style="--f:0.9s">
+                        <img src="img/characters/01_05.png" alt="" style="--f:1.2s"><img src="img/characters/01_06.png" alt="" style="--f:1.5s">
+                        <img src="img/characters/01_07.png" alt="" style="--f:1.8s"><img src="img/characters/01_08.png" alt="" style="--f:2.1s">
+                        <img src="img/characters/01_09.png" alt="" style="--f:2.4s"><img src="img/characters/01_10.png" alt="" style="--f:2.7s">
+                        <img src="img/characters/01_11.png" alt="" style="--f:3.0s"><img src="img/characters/01_12.png" alt="" style="--f:3.3s">
+                        <img src="img/characters/01_13.png" alt="" style="--f:3.6s"><img src="img/characters/01_14.png" alt="" style="--f:3.9s">
+                        <img src="img/characters/01_15.png" alt="" style="--f:4.2s"><img src="img/characters/01_16.png" alt="" style="--f:4.5s">
+                        <img src="img/characters/02_01.png" alt="" style="--f:0.15s"><img src="img/characters/02_02.png" alt="" style="--f:0.45s">
+                        <img src="img/characters/02_03.png" alt="" style="--f:0.75s"><img src="img/characters/02_04.png" alt="" style="--f:1.05s">
+                        <img src="img/characters/02_05.png" alt="" style="--f:1.35s"><img src="img/characters/02_06.png" alt="" style="--f:1.65s">
+                        <img src="img/characters/02_07.png" alt="" style="--f:1.95s"><img src="img/characters/02_08.png" alt="" style="--f:2.25s">
+                        <img src="img/characters/02_09.png" alt="" style="--f:2.55s"><img src="img/characters/02_10.png" alt="" style="--f:2.85s">
+                        <img src="img/characters/02_11.png" alt="" style="--f:3.15s"><img src="img/characters/02_12.png" alt="" style="--f:3.45s">
+                        <img src="img/characters/02_13.png" alt="" style="--f:3.75s"><img src="img/characters/02_14.png" alt="" style="--f:4.05s">
+                        <img src="img/characters/02_15.png" alt="" style="--f:4.35s"><img src="img/characters/02_16.png" alt="" style="--f:4.65s">
+                        <img src="img/characters/03_01.png" alt="" style="--f:0.2s"><img src="img/characters/03_02.png" alt="" style="--f:0.5s">
+                        <img src="img/characters/03_03.png" alt="" style="--f:0.8s"><img src="img/characters/03_04.png" alt="" style="--f:1.1s">
+                        <img src="img/characters/03_05.png" alt="" style="--f:1.4s"><img src="img/characters/03_06.png" alt="" style="--f:1.7s">
+                        <img src="img/characters/03_07.png" alt="" style="--f:2.0s"><img src="img/characters/03_08.png" alt="" style="--f:2.3s">
+                        <img src="img/characters/03_09.png" alt="" style="--f:2.6s"><img src="img/characters/03_10.png" alt="" style="--f:2.9s">
+                        <img src="img/characters/03_11.png" alt="" style="--f:3.2s"><img src="img/characters/03_12.png" alt="" style="--f:3.5s">
+                        <img src="img/characters/03_13.png" alt="" style="--f:3.8s"><img src="img/characters/03_14.png" alt="" style="--f:4.1s">
+                        <img src="img/characters/03_15.png" alt="" style="--f:4.4s"><img src="img/characters/03_16.png" alt="" style="--f:4.7s">
+                    </div>
+                </div>
+
+                <div class="illustration-zone" style="display:none">
+                    <div class="illustration-shelf">
+
+                        <!-- Slot 1 — replace placeholder with your illustration -->
+                        <div class="illus-slot">
+                            <div class="illus-placeholder">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                                </svg>
+                                <span>+&nbsp;add</span>
+                            </div>
+                            <span class="illus-label" id="lbl-1">Immigrant</span>
+                        </div>
+
+                        <!-- Slot 2 -->
+                        <div class="illus-slot">
+                            <div class="illus-placeholder">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                                </svg>
+                                <span>+&nbsp;add</span>
+                            </div>
+                            <span class="illus-label" id="lbl-2">Gig Worker</span>
+                        </div>
+
+                        <!-- Slot 3 -->
+                        <div class="illus-slot">
+                            <div class="illus-placeholder">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                                </svg>
+                                <span>+&nbsp;add</span>
+                            </div>
+                            <span class="illus-label" id="lbl-3">Uninsured</span>
+                        </div>
+
+                        <!-- Slot 4 -->
+                        <div class="illus-slot">
+                            <div class="illus-placeholder">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                                </svg>
+                                <span>+&nbsp;add</span>
+                            </div>
+                            <span class="illus-label" id="lbl-4">Senior</span>
+                        </div>
+
+                        <!-- Slot 5 -->
+                        <div class="illus-slot">
+                            <div class="illus-placeholder">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                                </svg>
+                                <span>+&nbsp;add</span>
+                            </div>
+                            <span class="illus-label" id="lbl-5">Low Income</span>
+                        </div>
+
+                    </div>
+                    <p class="illustration-note" id="illus-note">→ Replace with your own hand-drawn characters (see comments in index.html)</p>
+                </div>
+
+                <h2 class="welcome-title" id="welcome-title">How can I help you today?</h2>
+                <p class="welcome-sub" id="welcome-sub">Ask me anything about healthcare resources, insurance, or clinics in New York City — in any language.</p>
+
+                <div class="quick-chips" id="quick-chips">
+                    <button class="chip" onclick="useChip(this)">I have no insurance. Where can I get free care in NYC?</button>
+                    <button class="chip" onclick="useChip(this)">Am I eligible for Medicaid?</button>
+                    <button class="chip" onclick="useChip(this)">What is NYC Care and how do I apply?</button>
+                    <button class="chip" onclick="useChip(this)">I got a hospital bill I don't understand</button>
+                </div>
+            </div>
+        </div><!-- /chat-messages -->
+
+        <!-- Input bar -->
+        <div class="input-bar">
+            <div class="input-box" id="input-box">
+                <textarea
+                    id="chat-input"
+                    rows="1"
+                    placeholder="Ask about healthcare resources..."></textarea>
+                <div class="input-btns">
+                    <!-- Voice Session button -->
+                    <button class="voice-btn" id="vs-open-btn" onclick="openVoiceSession()" title="Start voice conversation">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                    </button>
+                    <!-- Send button -->
+                    <button id="send-btn" class="send-btn" onclick="sendMessage()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"/>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div id="rec-status" class="rec-status" style="display:none;">
+                <span class="rec-dot"></span>
+                <span id="rec-label">Recording — tap mic to stop</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── Sidebar ─────────────────────────────────────────────────── -->
+    <aside class="sidebar">
+
+        <!-- Voice Session CTA -->
+        <div class="side-card" style="text-align:center; padding:22px 18px;">
+            <div style="font-size:12px; font-weight:600; color:var(--primary); margin-bottom:6px; text-transform:uppercase; letter-spacing:.4px;">Real-time Voice</div>
+            <p style="font-size:12px; color:var(--t2); line-height:1.5; margin-bottom:14px;" id="vs-desc">Talk to CareCompass like a phone call. Ask in any language, get an instant spoken answer.</p>
+            <button class="vs-start-btn" onclick="openVoiceSession()" style="margin:0 auto;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+                <span id="vs-btn-label">Start Voice Session</span>
+            </button>
+        </div>
+
+        <!-- Zipcode finder -->
+        <div class="side-card">
+            <div class="side-card-header">
+                <div class="side-icon teal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                </div>
+                <h3 id="zip-title">Find Clinics Near You</h3>
+            </div>
+            <p class="side-desc" id="zip-desc">Enter your ZIP code to find free or low-cost clinics nearby.</p>
+            <div class="zip-row">
+                <input type="text" id="zip-input" maxlength="5" placeholder="e.g. 10016"
+                    oninput="this.value=this.value.replace(/\D/g,'')" class="zip-input">
+                <select id="zip-insurance" class="zip-select">
+                    <option value="">Any insurance</option>
+                    <option value="none">No insurance</option>
+                    <option value="medicaid">Medicaid</option>
+                    <option value="medicare">Medicare</option>
+                    <option value="private">Private insurance</option>
+                </select>
+            </div>
+            <button class="analyze-btn" onclick="searchByZip()" id="zip-search-btn" style="margin-top:10px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <span id="zip-btn-label">Search</span>
+            </button>
+            <div id="zip-results" style="margin-top:12px; display:none;"></div>
+            <div id="zip-map" style="display:none; margin-top:12px; height:220px; border-radius:12px; overflow:hidden; border:1px solid var(--border);"></div>
+        </div>
+
+        <!-- Insurance card upload -->
+        <div class="side-card">
+            <div class="side-card-header">
+                <div class="side-icon teal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="1" y="4" width="22" height="16" rx="2"/>
+                        <line x1="1" y1="10" x2="23" y2="10"/>
+                    </svg>
+                </div>
+                <h3 id="upload-title">Insurance Card</h3>
+            </div>
+            <p class="side-desc" id="upload-desc">Upload your card — I'll decode every term (Premium, Deductible, Copay) with concrete examples.</p>
+            <div class="upload-zone" id="upload-zone" onclick="document.getElementById('card-file').click()">
+                <input type="file" id="card-file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onchange="onFileUpload(event)" style="display:none;">
+                <div id="upload-hint">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <polyline points="16 16 12 12 8 16"/>
+                        <line x1="12" y1="12" x2="12" y2="21"/>
+                        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+                    </svg>
+                    <span id="upload-hint-label">Click to upload</span>
+                    <span style="font-size:10px;color:var(--t3);margin-top:4px;display:block;">JPG · PNG · WEBP · HEIC</span>
+                </div>
+                <img id="card-preview" style="display:none; max-width:100%; border-radius:8px;">
+            </div>
+            <button id="analyze-btn" onclick="analyzeCard()" style="display:none;" class="analyze-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <span id="analyze-label">Analyze Card</span>
+            </button>
+        </div>
+
+        <!-- NYC Resources -->
+        <div class="side-card">
+            <div class="side-card-header">
+                <div class="side-icon blue">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                        <polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                </div>
+                <h3 id="resources-title">NYC Resources</h3>
+            </div>
+            <div class="resource-list">
+                <a class="resource-item resource-link" href="https://www.nyc.gov/nyccare" target="_blank" rel="noopener">
+                    <span class="res-dot" style="background:#1a9182;box-shadow:0 0 5px rgba(26,145,130,.4)"></span>
+                    <div>
+                        <span class="res-name">NYC Care <span class="res-arrow">↗</span></span>
+                        <span class="res-desc" id="res-nyc-care">Free/low-cost. No immigration check.</span>
+                    </div>
+                </a>
+                <a class="resource-item resource-link" href="https://www.health.ny.gov/health_care/medicaid/apply/" target="_blank" rel="noopener">
+                    <span class="res-dot" style="background:#3b82f6;box-shadow:0 0 5px rgba(59,130,246,.4)"></span>
+                    <div>
+                        <span class="res-name">Medicaid <span class="res-arrow">↗</span></span>
+                        <span class="res-desc" id="res-medicaid">Government insurance for low income.</span>
+                    </div>
+                </a>
+                <a class="resource-item resource-link" href="https://www.health.ny.gov/health_care/medicaid/publications/docs/factsheets/emergency_medicaid.pdf" target="_blank" rel="noopener">
+                    <span class="res-dot" style="background:#8b5cf6;box-shadow:0 0 5px rgba(139,92,246,.4)"></span>
+                    <div>
+                        <span class="res-name">Emergency Medicaid <span class="res-arrow">↗</span></span>
+                        <span class="res-desc" id="res-emergency">Emergency care regardless of status.</span>
+                    </div>
+                </a>
+                <a class="resource-item resource-link" href="https://findahealthcenter.hrsa.gov/" target="_blank" rel="noopener">
+                    <span class="res-dot" style="background:#e07a52;box-shadow:0 0 5px rgba(224,122,82,.4)"></span>
+                    <div>
+                        <span class="res-name">Free Clinics (FQHC) <span class="res-arrow">↗</span></span>
+                        <span class="res-desc" id="res-fqhc">Community health centers, income-based fee.</span>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="disclaimer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p id="disclaimer-text">Information only. Always consult a healthcare professional for medical advice.</p>
+        </div>
+
+    </aside>
+</div>
+
+<!-- ── Voice Session Modal ─────────────────────────────────────────── -->
+<div id="voice-session" class="voice-session-overlay">
+    <div class="vs-status" id="vs-status">Tap the mic to start speaking</div>
+
+    <div class="vs-orb-wrap">
+        <div class="vs-orb" id="vs-orb">
+            <div class="vs-orb-ring"></div>
+            <div class="vs-orb-ring"></div>
+            <div class="vs-orb-ring"></div>
+            <!-- Mic icon shown when idle/listening -->
+            <div class="vs-mic-icon" id="vs-mic-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+            </div>
+            <!-- Waveform shown when speaking/processing -->
+            <div class="vs-wave" id="vs-wave" style="display:none;">
+                <div class="vs-bar"></div>
+                <div class="vs-bar"></div>
+                <div class="vs-bar"></div>
+                <div class="vs-bar"></div>
+                <div class="vs-bar"></div>
+                <div class="vs-bar"></div>
+                <div class="vs-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="vs-transcript" id="vs-transcript"></div>
+
+    <div style="display:flex; gap:16px; align-items:center;">
+        <!-- Start/Stop recording button -->
+        <button class="vs-start-btn" id="vs-record-btn" onclick="vsToggleRecord()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            <span id="vs-record-label">Tap to speak</span>
+        </button>
+
+        <!-- End call button -->
+        <button class="vs-end-btn" onclick="closeVoiceSession()" title="End session">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<!-- Loading overlay -->
+<div id="loading" class="loading-overlay" style="display:none;">
+    <div class="loading-inner">
+        <div class="loading-ring"></div>
+        <p id="loading-text">Processing...</p>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
