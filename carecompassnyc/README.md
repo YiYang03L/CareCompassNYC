@@ -2,7 +2,7 @@
 
 > AI-powered healthcare navigator for New York City's immigrant and underserved communities.
 
-Built with [Trae](https://trae.ai) · Powered by [MiniMax API](https://platform.minimax.io)  
+Built with Claude code · Powered by [MiniMax API](https://platform.minimax.io)  
 **Author:** YiYang Liu
 
 ---
@@ -43,31 +43,31 @@ Every year, hundreds of thousands of people in New York City avoid going to the 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        Browser (Frontend)                    │
-│                                                              │
+│                        Browser (Frontend)                   │
+│                                                             │
 │  ┌──────────────┐  ┌───────────────┐  ┌──────────────────┐  │
-│  │  Chat UI      │  │  Voice Session │  │  ZIP Code Map    │  │
-│  │  (marked.js)  │  │  Web Speech API│  │  Leaflet.js +    │  │
-│  │               │  │  → MiniMax TTS │  │  OpenStreetMap   │  │
-│  └──────┬────────┘  └──────┬────────┘  └────────┬─────────┘  │
-│         │                  │                     │            │
-└─────────┼──────────────────┼─────────────────────┼────────────┘
-          │  REST API calls   │                     │
+│  │  Chat UI     │  │ Voice Session │  │  ZIP Code Map    │  │
+│  │  (marked.js) │  │ Web Speech API│  │  Leaflet.js +    │  │
+│  │              │  │ → MiniMax TTS │  │  OpenStreetMap   │  │
+│  └──────┬───────┘  └──────┬────────┘  └────────┬─────────┘  │
+│         │                  │                   │            │
+└─────────┼──────────────────┼───────────────────┼─────────——─┘
+          │  REST API calls  │                   │
 ┌─────────▼──────────────────▼─────────────────────▼────────────┐
-│                     FastAPI Backend (Python)                    │
-│                                                                 │
-│   POST /api/chat          →  MiniMax Text-01 (chat)            │
-│   POST /api/tts           →  MiniMax speech-01-turbo (voice)   │
-│   POST /api/analyze-image →  MiniMax Text-01 (vision)          │
-│   GET  /api/facilities/search  →  Local JSON database          │
-└────────────────────────────┬────────────────────────────────────┘
+│                     FastAPI Backend (Python)                  │
+│                                                               │
+│   POST /api/chat          →  MiniMax Text-01 (chat)           │
+│   POST /api/tts           →  MiniMax speech-01-turbo (voice)  │
+│   POST /api/analyze-image →  MiniMax Text-01 (vision)         │
+│   GET  /api/facilities/search  →  Local JSON database         │
+└────────────────────────────┬──────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
-│                    MiniMax API  (api.minimax.io/v1)              │
-│                                                                  │
+│                    MiniMax API  (api.minimax.io/v1)             │
+│                                                                 │
 │   MiniMax-Text-01      ·  7-language chat + vision analysis     │
 │   speech-01-turbo      ·  Natural voice in 7 languages          │
-└──────────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 **STT:** Browser-native Web Speech API (real-time, no latency)  
@@ -85,7 +85,7 @@ Every year, hundreds of thousands of people in New York City avoid going to the 
 | AI (Voice Output) | MiniMax speech-01-turbo |
 | Voice Input | Web Speech API (browser built-in) |
 | Map | Leaflet.js + OpenStreetMap |
-| IDE | Trae |
+| AI Dev Too | Trae | Claude code
 
 ---
 
@@ -154,4 +154,4 @@ All facilities include: address, phone, website, accepted insurance types, langu
 ## Author
 
 **YiYang Liu**  
-Built with [Trae](https://trae.ai) + [MiniMax API](https://platform.minimax.io)
+Built with Claude code + [MiniMax API](https://platform.minimax.io)
