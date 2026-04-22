@@ -85,8 +85,6 @@ def language_instruction(lang: str) -> str:
     if not lang or lang == "auto":
         return "\n\nIMPORTANT: Detect the language of the user's message and respond in that same language."
     name = LANGUAGE_NAMES.get(lang, "English")
-    if lang == "en":
-        return ""
     return f"\n\nIMPORTANT: The user's preferred language is {name}. Please respond in {name}."
 
 
