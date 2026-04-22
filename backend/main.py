@@ -1,10 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 import httpx
 import base64
 import json
+import os
 
 from prompts import SYSTEM_PROMPT
 from config import MINIMAX_API_KEY, MINIMAX_API_BASE
@@ -344,10 +347,15 @@ async def search_facilities(zipcode: str, insurance: Optional[str] = None):
 
 
 # ── Health check ──────────────────────────────────────────────────────────────
-@app.get("/")
-async def root():
-    return {"message": "CareCompass NYC API is running"}
-
 @app.get("/health")
 async def health():
     return {"status": "healthy", "api_key_configured": bool(MINIMAX_API_KEY)}
+
+# ── Serve frontend static files (must be last) ────────────────────────────────
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+
+@app.get("/")
+async def serve_index():
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static")
