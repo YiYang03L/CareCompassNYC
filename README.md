@@ -5,6 +5,11 @@
 Built with Claude code · Powered by [MiniMax API](https://platform.minimax.io)  
 **Author:** YiYang Liu
 
+## 🔗 Live Demo                                                               
+                                                                                
+  👉 **[Try CareCompass NYC                                                     
+  live](https://carecompass-715980078839.europe-west1.run.app)**
+
 ---
 
 ## The Problem
@@ -102,30 +107,6 @@ These 7 languages represent the most spoken languages among NYC's immigrant comm
 ### Prerequisites
 - Python 3.10+
 - A MiniMax API key from [platform.minimax.io](https://platform.minimax.io)
-
-### Setup
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/carecompassnyc.git
-cd carecompassnyc
-
-# 2. Set up backend
-cd backend
-pip install -r requirements.txt
-
-# 3. Add your MiniMax API key
-echo "MINIMAX_API_KEY=your_key_here" > .env
-
-# 4. Start the backend
-uvicorn main:app --reload --port 8000
-
-# 5. In a new terminal, start the frontend
-cd ../frontend
-python3 -m http.server 3000
-
-# 6. Open http://localhost:3000
-```
 
 ---
 
