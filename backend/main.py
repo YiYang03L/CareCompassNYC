@@ -8,6 +8,7 @@ import httpx
 import base64
 import json
 import os
+import re
 
 from prompts import SYSTEM_PROMPT
 from config import MINIMAX_API_KEY, MINIMAX_API_BASE
@@ -92,15 +93,27 @@ def language_instruction(lang: str) -> str:
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     try:
-        system = SYSTEM_PROMPT + language_instruction(request.language)
+        # RAG step 1 — Retrieve: rank NYC facilities relevant to the user message
+        retrieved = retrieve_facilities(
+            request.message, request.language or "en", top_k=5
+        )
+        # RAG step 2 — Augment: inject retrieved facility data into the system prompt
+        system = (
+            SYSTEM_PROMPT
+            + language_instruction(request.language)
+            + format_facilities_context(retrieved)
+        )
+        # RAG step 3 — Generate: LLM answers grounded in retrieved context
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": request.message}
         ]
         response = await call_minimax_chat(messages)
 
-        # Detect if response mentions facilities → attach cards
-        facilities = get_relevant_facilities(request.message, response)
+        # UI cards: prefer retrieved facilities, fall back to post-hoc keyword match
+        facilities = retrieved[:3] if retrieved else get_relevant_facilities(
+            request.message, response
+        )
 
         return {
             "response": response,
@@ -276,6 +289,75 @@ def get_relevant_facilities(user_msg: str, ai_response: str) -> list:
         matched = all_facilities[:3]
 
     return matched
+
+
+# ── RAG: retrieve + rank facilities for prompt injection ─────────────────────
+BOROUGHS = ["manhattan", "bronx", "brooklyn", "queens", "staten island"]
+
+def retrieve_facilities(user_msg: str, user_lang: str = "en", top_k: int = 5) -> list:
+    """Score + rank facilities against the user's message.
+
+    Signals: insurance keywords, borough mention, zipcode prefix match,
+    language support, and tag/type keyword overlap. Returns up to top_k
+    facilities with score > 0.
+    """
+    msg = user_msg.lower()
+    all_f = load_facilities()
+
+    wants_uninsured = any(k in msg for k in KEYWORDS_UNINSURED)
+    wants_medicaid = any(k in msg for k in KEYWORDS_MEDICAID)
+
+    zip_match = re.search(r"\b(\d{5})\b", msg)
+    target_zip = zip_match.group(1) if zip_match else None
+
+    target_borough = next((b for b in BOROUGHS if b in msg), None)
+
+    scored = []
+    for f in all_f:
+        score = 0
+        if user_lang and user_lang in f.get("languages", []):
+            score += 2
+        if wants_uninsured and (
+            "nyc_care" in f.get("accepts", []) or "uninsured" in f.get("accepts", [])
+        ):
+            score += 5
+        if wants_medicaid and "medicaid" in f.get("accepts", []):
+            score += 5
+        if target_borough and target_borough == f.get("borough", "").lower():
+            score += 3
+        if target_zip and target_zip[:3] == f.get("zipcode", "")[:3]:
+            score += 4
+        tags_blob = (" ".join(f.get("tags", [])) + " " + f.get("type", "")).lower()
+        for word in msg.split():
+            if len(word) > 3 and word in tags_blob:
+                score += 1
+        if score > 0:
+            scored.append((score, f))
+
+    scored.sort(key=lambda x: -x[0])
+    return [f for _, f in scored[:top_k]]
+
+
+def format_facilities_context(facilities: list) -> str:
+    """Serialize retrieved facilities as a markdown block for the system prompt."""
+    if not facilities:
+        return ""
+    lines = [
+        "\n\n## RETRIEVED NYC HEALTHCARE FACILITIES",
+        "Use ONLY the facilities below when recommending specific places. "
+        "Cite the exact name, address, and phone. Do not invent facilities.\n",
+    ]
+    for f in facilities:
+        lines.append(
+            f"- **{f['name']}** ({f.get('type', 'facility')})\n"
+            f"  - Address: {f.get('address', 'N/A')}\n"
+            f"  - Phone: {f.get('phone', 'N/A')}\n"
+            f"  - Accepts: {', '.join(f.get('accepts', []))}\n"
+            f"  - Languages: {', '.join(f.get('languages', []))}\n"
+            f"  - Cost: {f.get('cost', 'N/A')}\n"
+            f"  - Hours: {f.get('hours', 'N/A')}"
+        )
+    return "\n".join(lines)
 
 
 # ── Facilities API endpoint ───────────────────────────────────────────────────
