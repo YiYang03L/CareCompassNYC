@@ -110,10 +110,8 @@ async def chat(request: ChatRequest):
         ]
         response = await call_minimax_chat(messages)
 
-        # UI cards: prefer retrieved facilities, fall back to post-hoc keyword match
-        facilities = retrieved[:3] if retrieved else get_relevant_facilities(
-            request.message, response
-        )
+        # UI cards mirror what was actually retrieved (empty = no cards shown)
+        facilities = retrieved[:3]
 
         return {
             "response": response,
@@ -292,14 +290,22 @@ def get_relevant_facilities(user_msg: str, ai_response: str) -> list:
 
 
 # ── RAG: retrieve + rank facilities for prompt injection ─────────────────────
-BOROUGHS = ["manhattan", "bronx", "brooklyn", "queens", "staten island"]
+# Multilingual borough name → canonical English (matches data in health_facilities.json)
+BOROUGH_ALIASES = {
+    "manhattan": "manhattan", "曼哈顿": "manhattan",
+    "bronx": "bronx", "布朗克斯": "bronx",
+    "brooklyn": "brooklyn", "布鲁克林": "brooklyn",
+    "queens": "queens", "皇后区": "queens", "法拉盛": "queens",
+    "staten island": "staten island", "史泰登岛": "staten island",
+}
 
 def retrieve_facilities(user_msg: str, user_lang: str = "en", top_k: int = 5) -> list:
     """Score + rank facilities against the user's message.
 
-    Signals: insurance keywords, borough mention, zipcode prefix match,
-    language support, and tag/type keyword overlap. Returns up to top_k
-    facilities with score > 0.
+    Content signals (required): insurance keywords, borough mention, ZIP match.
+    Tiebreaker signals (weak): language support, tag/type keyword overlap.
+    A facility is included only if it matches at least one content signal,
+    so generic queries return an empty list instead of the first three.
     """
     msg = user_msg.lower()
     all_f = load_facilities()
@@ -310,29 +316,34 @@ def retrieve_facilities(user_msg: str, user_lang: str = "en", top_k: int = 5) ->
     zip_match = re.search(r"\b(\d{5})\b", msg)
     target_zip = zip_match.group(1) if zip_match else None
 
-    target_borough = next((b for b in BOROUGHS if b in msg), None)
+    target_borough = next(
+        (canonical for alias, canonical in BOROUGH_ALIASES.items() if alias in msg),
+        None,
+    )
 
     scored = []
     for f in all_f:
-        score = 0
-        if user_lang and user_lang in f.get("languages", []):
-            score += 2
+        content = 0
+        tiebreak = 0
         if wants_uninsured and (
             "nyc_care" in f.get("accepts", []) or "uninsured" in f.get("accepts", [])
         ):
-            score += 5
+            content += 5
         if wants_medicaid and "medicaid" in f.get("accepts", []):
-            score += 5
-        if target_borough and target_borough == f.get("borough", "").lower():
-            score += 3
+            content += 5
         if target_zip and target_zip[:3] == f.get("zipcode", "")[:3]:
-            score += 4
+            content += 4
+        if target_borough and target_borough == f.get("borough", "").lower():
+            content += 3
+        if user_lang and user_lang in f.get("languages", []):
+            tiebreak += 2
         tags_blob = (" ".join(f.get("tags", [])) + " " + f.get("type", "")).lower()
         for word in msg.split():
             if len(word) > 3 and word in tags_blob:
-                score += 1
-        if score > 0:
-            scored.append((score, f))
+                tiebreak += 1
+        # Require at least one content signal; otherwise skip
+        if content > 0:
+            scored.append((content + tiebreak, f))
 
     scored.sort(key=lambda x: -x[0])
     return [f for _, f in scored[:top_k]]
