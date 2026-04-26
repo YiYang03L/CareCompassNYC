@@ -5,13 +5,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 import httpx
-import base64
 import json
 import os
 import re
 
 from prompts import SYSTEM_PROMPT
-from config import MINIMAX_API_KEY, MINIMAX_API_BASE
+from config import GEMINI_API_KEY, GEMINI_API_BASE, GEMINI_MODEL
 
 app = FastAPI(title="CareCompass NYC API")
 
@@ -32,27 +31,19 @@ class ImageAnalysisRequest(BaseModel):
     mime_type: Optional[str] = "image/jpeg"
     language: Optional[str] = "en"
 
-class STTRequest(BaseModel):
-    audio_data: str
-    mime_type: Optional[str] = "audio/webm"
 
-class TTSRequest(BaseModel):
-    text: str
-    language: Optional[str] = "en"
+# ── Gemini API (OpenAI-compatible endpoint) ───────────────────────────────────
+async def call_gemini_chat(messages: list, model: str = None) -> str:
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
 
-
-# ── MiniMax API (OpenAI-compatible, api.minimax.io/v1) ────────────────────────
-async def call_minimax_chat(messages: list, model: str = "MiniMax-Text-01") -> str:
-    if not MINIMAX_API_KEY:
-        raise HTTPException(status_code=500, detail="MINIMAX_API_KEY not configured")
-
-    url = f"{MINIMAX_API_BASE}/chat/completions"
+    url = f"{GEMINI_API_BASE}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+        "Authorization": f"Bearer {GEMINI_API_KEY}",
         "Content-Type": "application/json"
     }
     payload = {
-        "model": model,
+        "model": model or GEMINI_MODEL,
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": 1000,
@@ -63,10 +54,9 @@ async def call_minimax_chat(messages: list, model: str = "MiniMax-Text-01") -> s
         if response.status_code != 200:
             raise HTTPException(
                 status_code=response.status_code,
-                detail=f"MiniMax API error {response.status_code}: {response.text}"
+                detail=f"Gemini API error {response.status_code}: {response.text}"
             )
         data = response.json()
-        # OpenAI-compatible response format
         return data["choices"][0]["message"]["content"]
 
 
@@ -108,7 +98,7 @@ async def chat(request: ChatRequest):
             {"role": "system", "content": system},
             {"role": "user", "content": request.message}
         ]
-        response = await call_minimax_chat(messages)
+        response = await call_gemini_chat(messages)
 
         # UI cards mirror what was actually retrieved (empty = no cards shown)
         facilities = retrieved[:3]
@@ -153,7 +143,7 @@ CRITICAL: Respond entirely in the user's language. Do NOT mix in any other langu
                 {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{request.image_data}"}}
             ]}
         ]
-        response = await call_minimax_chat(messages)
+        response = await call_gemini_chat(messages)
         return {"response": response}
     except HTTPException:
         raise
@@ -161,97 +151,9 @@ CRITICAL: Respond entirely in the user's language. Do NOT mix in any other langu
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── STT ───────────────────────────────────────────────────────────────────────
-@app.post("/api/stt")
-async def speech_to_text(request: STTRequest):
-    try:
-        url = f"{MINIMAX_API_BASE}/audio/transcriptions"
-        headers = {"Authorization": f"Bearer {MINIMAX_API_KEY}"}
-
-        audio_bytes = base64.b64decode(request.audio_data)
-
-        # Match the actual format Chrome records (webm, not wav)
-        mime = (request.mime_type or "audio/webm").split(";")[0].strip()
-        ext_map = {"audio/webm": "webm", "audio/mp4": "m4a",
-                   "audio/ogg": "ogg", "audio/wav": "wav"}
-        ext = ext_map.get(mime, "webm")
-
-        files = {
-            "file": (f"audio.{ext}", audio_bytes, mime),
-            "model": (None, "speech-01")
-        }
-
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, headers=headers, files=files)
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code,
-                                    detail=f"MiniMax STT error: {response.text}")
-            data = response.json()
-            return {"text": data.get("text", "")}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── TTS ───────────────────────────────────────────────────────────────────────
-VOICE_MAP = {
-    "zh": "female-tianmei",
-    "en": "female-shaonv",
-    "es": "female-shaonv",
-    "hi": "female-shaonv",
-    "ar": "female-shaonv",
-    "ru": "female-shaonv",
-    "fr": "female-shaonv",
-}
-
-@app.post("/api/tts")
-async def text_to_speech(request: TTSRequest):
-    try:
-        url = f"{MINIMAX_API_BASE}/t2a_v2"
-        headers = {
-            "Authorization": f"Bearer {MINIMAX_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        voice_id = VOICE_MAP.get(request.language, "female-shaonv")
-        payload = {
-            "model": "speech-01-turbo",
-            "text": request.text[:500],  # Limit for speed
-            "stream": False,
-            "voice_setting": {
-                "voice_id": voice_id,
-                "speed": 1.0,
-                "vol": 1.0,
-                "pitch": 0
-            },
-            "audio_setting": {
-                "sample_rate": 32000,
-                "bitrate": 128000,
-                "format": "mp3"
-            }
-        }
-
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code,
-                                    detail=f"MiniMax TTS error: {response.text}")
-            data = response.json()
-            # MiniMax TTS v2 returns audio in data.audio field (hex or base64)
-            audio_data = data.get("data", {}).get("audio", "")
-            if not audio_data:
-                raise HTTPException(status_code=500, detail="No audio in TTS response")
-            # Convert hex to base64 if needed
-            if all(c in '0123456789abcdefABCDEF' for c in audio_data[:20]):
-                audio_bytes = bytes.fromhex(audio_data)
-                audio_base64 = base64.b64encode(audio_bytes).decode()
-            else:
-                audio_base64 = audio_data
-            return {"audio": audio_base64}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# ── STT/TTS now handled in the browser via Web Speech API ─────────────────────
+# (legacy MiniMax STT/TTS endpoints removed; frontend uses
+#  webkitSpeechRecognition + window.speechSynthesis directly)
 
 
 # ── NYC facilities data ───────────────────────────────────────────────────────
@@ -440,7 +342,7 @@ async def search_facilities(zipcode: str, insurance: Optional[str] = None):
 # ── Health check ──────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "api_key_configured": bool(MINIMAX_API_KEY)}
+    return {"status": "healthy", "api_key_configured": bool(GEMINI_API_KEY)}
 
 # ── Serve frontend static files (must be last) ────────────────────────────────
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
