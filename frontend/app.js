@@ -593,27 +593,29 @@ async function sendMessage() {
     }
 }
 
-// ── TTS ─────────────────────────────────────────────────────────────
+// ── TTS (browser Web Speech API — free, no backend) ────────────────
 async function playTTS(text) {
-    if (!text) return;
+    if (!text || !window.speechSynthesis) return null;
     try {
-        if (vsCurrentAudio) { vsCurrentAudio.pause(); vsCurrentAudio = null; }
-        const res = await fetch(`${API_BASE}/api/tts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text.slice(0, 400), language: lang })
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const raw = atob(data.audio);
-        const buf = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
-        const blob = new Blob([buf], { type: 'audio/mp3' });
-        const url = URL.createObjectURL(blob);
-        vsCurrentAudio = new Audio(url);
-        vsCurrentAudio.onended = () => { URL.revokeObjectURL(url); vsCurrentAudio = null; };
-        vsCurrentAudio.play();
-        return vsCurrentAudio;
+        // Cancel any speech currently playing
+        window.speechSynthesis.cancel();
+
+        const utter = new SpeechSynthesisUtterance(text.slice(0, 400));
+        utter.lang = vsGetLangCode();
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+
+        // Wrapper so the rest of the code can keep calling .pause() and .onended
+        const handle = {
+            pause: () => window.speechSynthesis.cancel(),
+            onended: null,
+        };
+        utter.onend = () => { if (handle.onended) handle.onended(); };
+        utter.onerror = () => { if (handle.onended) handle.onended(); };
+
+        vsCurrentAudio = handle;
+        window.speechSynthesis.speak(utter);
+        return handle;
     } catch (_) { return null; }
 }
 
